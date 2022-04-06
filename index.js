@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { MongoClient } from "mongodb";
+import { MongoClient, ObjectId } from "mongodb";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -35,6 +35,11 @@ app.get("/mobiles", async function (req, res) {
   res.send(mobiles);
 });
 
+app.get("/cart", async function (req, res) {
+  const cartItems = await getCartList();
+  res.send(cartItems);
+});
+
 app.post("/mobiles", async function (req, res) {
   const data = req.body;
   console.log(data);
@@ -45,4 +50,41 @@ app.post("/mobiles", async function (req, res) {
   res.send(result);
 });
 
+app.put("/cart", async function (req, res) {
+  const mobile = req.body;
+  console.log("mobile", mobile);
+
+  const cartItem = await getCartItemById(mobile);
+
+  if (cartItem) {
+    await updateQtyById(mobile);
+  } else {
+    console.log("inserting");
+    await client
+      .db("ecommerce")
+      .collection("cart")
+      .insertOne({ ...mobile, qty: 1 });
+  }
+  const allCart = await getCartList();
+  res.send(allCart);
+});
+
 app.listen(PORT, () => console.log("App started in ", PORT));
+
+async function getCartItemById(mobile) {
+  return await client
+    .db("ecommerce")
+    .collection("cart")
+    .findOne({ _id: mobile._id });
+}
+
+async function updateQtyById(mobile) {
+  return await client
+    .db("ecommerce")
+    .collection("cart")
+    .updateOne({ _id: mobile._id }, { $inc: { qty: +1 } });
+}
+
+async function getCartList() {
+  return await client.db("ecommerce").collection("cart").find({}).toArray();
+}
