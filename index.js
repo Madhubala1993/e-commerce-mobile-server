@@ -27,11 +27,7 @@ app.get("/", function (req, res) {
 });
 
 app.get("/mobiles", async function (req, res) {
-  const mobiles = await client
-    .db("ecommerce")
-    .collection("mobiles")
-    .find({})
-    .toArray();
+  const mobiles = await getMobilesList();
   res.send(mobiles);
 });
 
@@ -43,33 +39,64 @@ app.get("/cart", async function (req, res) {
 app.post("/mobiles", async function (req, res) {
   const data = req.body;
   console.log(data);
-  const result = await client
-    .db("ecommerce")
-    .collection("mobiles")
-    .insertMany(data);
+  const result = await addMobilesList(data);
   res.send(result);
+});
+
+app.post("/checkout", async function (req, res) {
+  const data = req.body;
+  console.log(data);
+  const result = await client.db("ecommerce").collection("cart").deleteMany({});
+
+  const allCart = await getCartList();
+  res.send(allCart);
 });
 
 app.put("/cart", async function (req, res) {
   const mobile = req.body;
+  const { type } = req.query;
+
   console.log("mobile", mobile);
 
   const cartItem = await getCartItemById(mobile);
 
   if (cartItem) {
-    await updateQtyById(mobile);
+    if (type === "decrement" && cartItem.qty <= 1) {
+      await deleteCartItemById(mobile);
+    } else {
+      await updateQtyById(mobile, type);
+    }
   } else {
     console.log("inserting");
-    await client
-      .db("ecommerce")
-      .collection("cart")
-      .insertOne({ ...mobile, qty: 1 });
+    await insertCartItem(mobile);
   }
   const allCart = await getCartList();
   res.send(allCart);
 });
 
 app.listen(PORT, () => console.log("App started in ", PORT));
+
+async function deleteCartItemById(mobile) {
+  return await client
+    .db("ecommerce")
+    .collection("cart")
+    .deleteOne({ _id: mobile._id });
+}
+
+async function addMobilesList(data) {
+  return await client.db("ecommerce").collection("mobiles").insertMany(data);
+}
+
+async function getMobilesList() {
+  return await client.db("ecommerce").collection("mobiles").find({}).toArray();
+}
+
+async function insertCartItem(mobile) {
+  return await client
+    .db("ecommerce")
+    .collection("cart")
+    .insertOne({ ...mobile, qty: 1 });
+}
 
 async function getCartItemById(mobile) {
   return await client
@@ -78,11 +105,14 @@ async function getCartItemById(mobile) {
     .findOne({ _id: mobile._id });
 }
 
-async function updateQtyById(mobile) {
+async function updateQtyById(mobile, type) {
   return await client
     .db("ecommerce")
     .collection("cart")
-    .updateOne({ _id: mobile._id }, { $inc: { qty: +1 } });
+    .updateOne(
+      { _id: mobile._id },
+      { $inc: { qty: type === "increment" ? +1 : -1 } }
+    );
 }
 
 async function getCartList() {
